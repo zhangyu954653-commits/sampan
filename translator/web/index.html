@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中泰实时翻译字幕</title>
+<style>
+  /* ============================================================
+     浅色为主。窗口经常只占屏幕 1/4（旁边还要共享文件），
+     所以：控件收进菜单、最新内容固定在顶部、字号可调。
+     ============================================================ */
+  :root{
+    --bg:#f6f7f9;  --card:#ffffff;  --card-2:#fbfcfd;
+    --line:#e3e6ec; --line-2:#eef0f4;
+    --text:#15181d; --muted:#6b7280; --faint:#9aa1ac;
+    --me:#2563eb;   --me-bg:#eff4ff;  --me-chip:#1d4ed8;
+    --them:#b45309; --them-bg:#fff7ed; --them-chip:#9a3412;
+    --ok:#047857;   --bad:#dc2626;    --warn:#b45309;
+    --num-bg:#fef3c7; --num-fg:#92400e;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+    --fs:16px; --pad:10px; --gap:8px;
+  }
+  body.dark{
+    --bg:#0e1116;  --card:#161a21;  --card-2:#1b2029;
+    --line:#262c36; --line-2:#1f242c;
+    --text:#e8ecf2; --muted:#98a1b0; --faint:#6b7482;
+    --me:#5b9dff;  --me-bg:rgba(91,157,255,.10); --me-chip:#5b9dff;
+    --them:#f0a44a; --them-bg:rgba(240,164,74,.10); --them-chip:#f0a44a;
+    --ok:#34d399;  --bad:#f87171;    --warn:#fbbf24;
+    --num-bg:rgba(251,191,36,.18); --num-fg:#fbbf24;
+    --shadow:none;
+  }
+  body.dense{--pad:6px; --gap:5px}
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Microsoft YaHei UI","Microsoft YaHei","Noto Sans Thai","Leelawadee UI",
+                "Segoe UI",system-ui,-apple-system,sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- 顶栏：窄窗口下也必须只占一行 ---------- */
+  header{
+    flex:0 0 auto; display:flex; align-items:center; gap:6px;
+    padding:7px 10px; background:var(--card);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{
+    display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700;
+    letter-spacing:.2px; white-space:nowrap; flex:0 0 auto;
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--bad);flex:0 0 auto;
+       transition:background .2s}
+  .dot.on{background:var(--ok)}
+  .engine{
+    color:var(--faint); font-weight:400; font-size:11px; flex:1 1 auto;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;
+  }
+  .ctrls{display:flex; align-items:center; gap:4px; flex:0 0 auto}
+
+  button{
+    background:var(--card-2); color:var(--text); border:1px solid var(--line);
+    border-radius:7px; padding:5px 9px; font-size:12px; cursor:pointer;
+    font-family:inherit; transition:.12s; white-space:nowrap; line-height:1.4;
+  }
+  button:hover{border-color:var(--muted)}
+  button.active{background:var(--me); border-color:var(--me); color:#fff; font-weight:600}
+  body.dark button.active{color:#06101f}
+  button.off{opacity:.4; text-decoration:line-through}
+
+  /* 暂停：投屏时对面也在看这块屏，必须一眼看出是"停了"而不是"坏了" */
+  #pause{font-weight:700; padding:5px 11px}
+  #pause.on{background:var(--warn); border-color:var(--warn); color:#fff}
+  body.dark #pause.on{color:#1a1204}
+  #pausedBar{
+    display:none; align-items:center; justify-content:center; gap:10px;
+    padding:7px 12px; font-size:13px; font-weight:700;
+    background:var(--warn); color:#fff; letter-spacing:.3px;
+  }
+  body.dark #pausedBar{color:#1a1204}
+  #pausedBar small{font-weight:500; opacity:.9; letter-spacing:0}
+  body.paused #pausedBar{display:flex}
+  body.paused main{opacity:.45}
+
+  /* 极速模式：按音频秒数计费且没有免费额度，开着必须一眼看得见，
+     否则开完会才发现忘了关。开关藏在 ⋯ 菜单里（顶栏放不下了），
+     但开着的时候顶栏会出现这个绿色小标，实时显示这场花了多少。 */
+  /* 菜单里的分组标题：把"花钱的"和"对外的"跟纯显示选项分开 */
+  .menu .sect{font-size:10px; color:var(--faint); padding:7px 10px 3px;
+              border-top:1px solid var(--line); margin-top:4px}
+  /* 这两项可以在 config.json 里彻底关掉（share_enabled / 无腾讯云流式时） */
+  .menu button[hidden], .menu .sect[hidden]{display:none}
+
+  /* 分享面板 */
+  #sharePanel{display:none; padding:8px 12px; background:var(--card-2);
+              border-bottom:1px solid var(--line)}
+  body.sharing #sharePanel{display:block}
+  .sp-row{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+  .sp-row b{font-size:13px; color:var(--ok)}
+  #shareViewers{font-size:11px; color:var(--muted); margin-right:auto}
+  #shareUrl{flex:1; min-width:0; font-size:11px; padding:5px 8px;
+            border:1px solid var(--line); border-radius:6px;
+            background:var(--card); color:var(--text); font-family:inherit}
+  #sharePanel small{font-size:10.5px; color:var(--muted); line-height:1.5;
+                    display:block}
+  /* 远端观众：所有会影响到本机的控件全部拿掉 */
+  body.viewer .ctrls, body.viewer #sharePanel, body.viewer #pausedBar button,
+  body.viewer .editbar{display:none !important}
+  body.viewer .src span{cursor:default}
+  body.viewer .src span:hover{background:transparent}
+  #viewerTag{display:none; font-size:10.5px; color:var(--muted);
+             flex:0 0 auto; white-space:nowrap}
+  body.viewer #viewerTag{display:inline}
+
+  #fastChip{display:none; align-items:center; gap:4px; flex:0 0 auto;
+            background:var(--ok); color:#fff; font-weight:700; font-size:10.5px;
+            padding:3px 8px; border-radius:20px; cursor:pointer;
+            font-variant-numeric:tabular-nums; white-space:nowrap}
+  body.dark #fastChip{color:#052b20}
+  body.fast #fastChip{display:inline-flex}
+
+  /* 声道 + 语言锁：并成一颗药丸，省地方也更清楚 */
+  .pill{display:flex; align-items:center; border:1px solid var(--line);
+        border-radius:8px; overflow:hidden; background:var(--card-2); flex:0 0 auto}
+  .pill button{border:0; border-radius:0; background:transparent; padding:5px 8px}
+  .pill .who{font-weight:700}
+  .pill.me .who{color:var(--me-chip)}
+  .pill.them .who{color:var(--them-chip)}
+  .pill .lang{border-left:1px solid var(--line); color:var(--muted); font-size:11px;
+              min-width:40px; text-align:center}
+  .pill .lang.locked{background:var(--ok); color:#fff; font-weight:700}
+
+  /* 更多菜单 */
+  .menu-wrap{position:relative; flex:0 0 auto}
+  .menu{
+    position:absolute; right:0; top:calc(100% + 6px); z-index:20;
+    background:var(--card); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 8px 24px rgba(16,24,40,.12); padding:6px; min-width:186px;
+  }
+  body.dark .menu{box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  .menu[hidden]{display:none}
+  .menu button{display:flex; width:100%; justify-content:space-between; gap:10px;
+               background:transparent; border:0; border-radius:6px; padding:7px 9px;
+               font-size:12.5px}
+  .menu button:hover{background:var(--card-2)}
+  /* 菜单项开启时不能沿用通用的 .active（白字）：那条规则的背景会被上面的
+     transparent 盖掉，只剩 color:#fff，整行就成了白字白底——功能在，但看不见。
+     这里标签一律用正文色保证可读，开没开只看右边那颗徽章。
+     用 #menu 起头是故意的：通用的 body.dark button.active 权重是 (0,2,2)，
+     写成 .menu button.active (0,2,1) 压不住它，深色下照样是暗字暗底。 */
+  #menu button.active{background:var(--me-bg); color:var(--text); font-weight:650}
+  .menu button i{color:var(--faint); font-style:normal; font-size:11px}
+  #menu button.active i{background:var(--me); color:#fff; font-weight:700;
+                        font-size:10.5px; padding:1px 7px; border-radius:999px}
+  body.dark #menu button.active i{color:#06101f}
+  .menu hr{border:0; border-top:1px solid var(--line-2); margin:5px 2px}
+  .menu .row2{display:flex; gap:6px}
+  .menu .row2 button{justify-content:center; border:1px solid var(--line)}
+
+  /* ---------- 正在说话 ---------- */
+  #live{
+    flex:0 0 auto; display:flex; align-items:center; gap:8px;
+    padding:6px 12px; background:var(--me-bg);
+    border-bottom:1px solid var(--line); color:var(--muted);
+    font-size:calc(var(--fs)*.76); max-height:20vh; overflow:hidden;
+  }
+  #live[hidden]{display:none}
+  #live.them{background:var(--them-bg)}
+  #liveWho{font-weight:700; color:var(--me-chip); flex:0 0 auto; font-size:11px}
+  #live.them #liveWho{color:var(--them-chip)}
+  #liveText{flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+            direction:rtl; text-align:left}
+  .dots{display:inline-flex;gap:3px;flex:0 0 auto}
+  .dots i{width:4px;height:4px;border-radius:50%;background:var(--me);
+          animation:bounce 1.1s infinite}
+  #live.them .dots i{background:var(--them)}
+  .dots i:nth-child(2){animation-delay:.15s}
+  .dots i:nth-child(3){animation-delay:.3s}
+  @keyframes bounce{0%,60%,100%{opacity:.25}30%{opacity:1}}
+
+  /* ---------- 字幕区 ---------- */
+  main{flex:1 1 auto; overflow-y:auto; padding:10px 12px 16px; overscroll-behavior:contain}
+  main::-webkit-scrollbar{width:8px}
+  main::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px}
+  main::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+  .row{
+    margin:0 0 var(--gap); padding:var(--pad) 12px; border-radius:10px;
+    background:var(--card); border:1px solid var(--line);
+    border-left:3px solid var(--line); box-shadow:var(--shadow);
+    animation:in .16s ease-out;
+  }
+  @keyframes in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+  .row.me{border-left-color:var(--me)}
+  .row.them{border-left-color:var(--them)}
+  /* 最新那条给一点强调，小窗口下一眼能找到 */
+  .row.newest{border-color:var(--me); background:var(--card)}
+  .row.newest.them{border-color:var(--them)}
+
+  .meta{display:flex;align-items:center;gap:7px;margin-bottom:3px;
+        font-size:10.5px;color:var(--faint)}
+  .who{font-weight:700;font-size:10.5px;padding:1px 6px;border-radius:20px}
+  .me .who{background:var(--me-bg);color:var(--me-chip)}
+  .them .who{background:var(--them-bg);color:var(--them-chip)}
+  .tag{border:1px solid var(--line);border-radius:20px;padding:1px 6px}
+  .lag{font-variant-numeric:tabular-nums}
+  .lag.warn{color:var(--warn)}
+  .lag.bad{color:var(--bad);font-weight:700}
+
+  .src{font-size:calc(var(--fs)*.72); color:var(--muted); line-height:1.45;
+       margin-bottom:3px; word-break:break-word}
+  .src span{cursor:text; border-radius:4px; padding:0 2px}
+  .src span:hover{background:var(--line-2)}
+  .src span[contenteditable="true"]{background:var(--card-2); color:var(--text);
+                                    outline:2px solid var(--me); display:inline-block}
+  .src span.edited::after{content:"✓";color:var(--ok);font-size:10px;margin-left:3px}
+
+  .dst{font-size:var(--fs); font-weight:600; line-height:1.4; word-break:break-word}
+  .src span + span::before, .dst span + span::before{content:" "}
+  .dst span.wait{color:var(--faint); font-weight:400; font-size:calc(var(--fs)*.72)}
+  .dst span.wait::after,.dst span.typing::after{
+    content:"▍"; animation:blink 1s steps(2) infinite; font-weight:400; opacity:.6}
+  .dst span.empty-tr{opacity:.35}
+  @keyframes blink{50%{opacity:0}}
+
+  /* 没有实质内容的那一句（识别把噪音听成了词，模型判定无需翻译）：
+     缩成一行小灰字。不删是有意的——凭空消失会让人以为程序把话弄丢了。 */
+  .src span.nosub{opacity:.32; font-size:calc(var(--fs)*.6)}
+  .src span.nosub::after{content:"·无实质内容"; font-size:9px; opacity:.7;
+                         margin-left:4px; white-space:nowrap}
+  .src span.nosub.echo::after{content:"·回声，已忽略"}
+  /* 整条都没内容时，连那行 meta（说话人/语种/时间/延迟）一起压掉——
+     否则 meta 比内容本身还显眼，等于没省地方。 */
+  .row.allnosub{padding:2px 12px; box-shadow:none; background:transparent;
+                margin-bottom:2px}
+  .row.allnosub .meta{display:none}
+  .row.allnosub .src{margin-bottom:0}
+  .row.allnosub .dst{display:none}
+  body.big .row.allnosub{display:none}      /* 大字幕模式下彻底不显示 */
+
+  /* 数字高亮：识别把 13 听成 3 这种错误翻译救不回来，只能让人一眼核对 */
+  .num{background:var(--num-bg); color:var(--num-fg); font-weight:700;
+       border-radius:3px; padding:0 3px}
+
+  body.nosrc .src{display:none}
+
+  /* 编辑工具条 */
+  .editbar{display:flex; align-items:center; gap:6px; margin:5px 0 6px}
+  .editbar button{padding:4px 10px; font-size:11.5px}
+  .editbar .ok{background:var(--ok); border-color:var(--ok); color:#fff; font-weight:700}
+  .editbar span{color:var(--faint); font-size:10.5px}
+
+  /* ---------- 大字幕 ---------- */
+  body.big main{display:flex;align-items:center;justify-content:center;padding:24px}
+  body.big .row{display:none}
+  body.big .row.newest{
+    display:block; width:100%; max-width:1400px; text-align:center;
+    border:0; background:transparent; box-shadow:none; padding:0;
+  }
+  body.big .row.newest .meta{justify-content:center}
+  body.big .row.newest .src{font-size:calc(var(--fs)*.6)}
+  body.big .row.newest .dst{font-size:calc(var(--fs)*2.1); line-height:1.3}
+
+  /* ---------- 纪要生成的提示条 ---------- */
+  #toast{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    max-width:min(92vw,640px); display:flex; align-items:center; gap:10px;
+    padding:10px 14px; border-radius:10px; font-size:12.5px;
+    background:var(--card); border:1px solid var(--line);
+    box-shadow:0 8px 26px rgba(15,23,42,.16); z-index:50;
+  }
+  body.dark #toast{box-shadow:0 8px 26px rgba(0,0,0,.55)}
+  #toast[hidden]{display:none}
+  #toast .spin{
+    width:13px; height:13px; flex:0 0 auto; border-radius:50%;
+    border:2px solid var(--line-2); border-top-color:var(--me);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #toast.done .spin{animation:none; border:0; background:var(--ok);
+                    position:relative}
+  #toast.err .spin{animation:none; border:0; background:var(--them)}
+  #toast .msg{flex:1 1 auto; line-height:1.5}
+  #toast .path{display:block; color:var(--faint); font-size:11px;
+               margin-top:2px; word-break:break-all}
+  #toast button{padding:4px 10px; font-size:11.5px; flex:0 0 auto}
+
+  .empty{color:var(--muted);text-align:center;margin-top:12vh;line-height:1.9;
+         font-size:13px}
+  .empty b{color:var(--text);display:block;font-size:16px;margin-bottom:8px}
+  kbd{background:var(--card);border:1px solid var(--line);border-radius:4px;
+      padding:1px 5px;font-size:11px;font-family:ui-monospace,Consolas,monospace}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="dot" id="dot"></span>中⇄ไทย</div>
+  <span class="engine" id="engine">连接中…</span>
+
+  <!-- 只读模式下 .ctrls 整块隐藏，所以这个标签要放在它外面 -->
+  <span id="viewerTag"></span>
+  <div class="ctrls">
+    <button id="pause" title="暂停后不识别、不翻译，不产生任何调用（快捷键 P）">暂停</button>
+    <!-- 极速开着时才出现。平时不占地方，开着时一眼看得见花了多少 -->
+    <span id="fastChip" title="极速模式开着，按音频秒数计费。点一下关掉"></span>
+    <span class="pill me"><button class="who" id="mMic">我方</button><button class="lang" id="lMic">自动</button></span>
+    <span class="pill them"><button class="who" id="mSys">对方</button><button class="lang" id="lSys">自动</button></span>
+    <div class="menu-wrap">
+      <button id="more">⋯</button>
+      <div class="menu" id="menu" hidden>
+        <button id="top">窗口置顶 <i id="topV">关</i></button>
+        <button id="order">最新在上 <i id="orderV">是</i></button>
+        <button id="mode">大字幕 <i>F</i></button>
+        <button id="dense">紧凑 <i>D</i></button>
+        <button id="nosrc">隐藏原文 <i>S</i></button>
+        <button id="theme">深色模式 <i id="themeV">关</i></button>
+        <button id="tts">朗读译文 <i id="ttsV">关</i></button>
+        <!-- 下面这两项和上面性质不同：一个花钱、一个对外开链接。
+             混在显示选项里容易误点，所以单独分出来并标明。 -->
+        <div class="sect" id="optSect">按需开启 · 平时不用</div>
+        <button id="fast" title="边说边识别，快约 1 秒。按音频秒数计费、没有免费额度">⚡ 极速模式 <i id="fastV">关</i></button>
+        <button id="share" title="生成一条公网链接，对方点开就能看字幕，不用再共享屏幕">🔗 分享字幕 <i id="shareV">关</i></button>
+        <hr>
+        <div class="row2">
+          <button id="minus">A −</button>
+          <button id="plus">A ＋</button>
+        </div>
+        <hr>
+        <button id="minutes">生成会议纪要 <i>M</i></button>
+        <hr>
+        <button id="clear">清屏 <i>C</i></button>
+        <button id="full">全屏</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- 分享面板：链接生成后贴在这里，直接复制发进钉钉群 -->
+<div id="sharePanel" hidden>
+  <div class="sp-row">
+    <b>🔗 字幕链接已开启</b>
+    <span id="shareViewers"></span>
+    <button id="shareOff">关闭分享</button>
+  </div>
+  <div class="sp-row">
+    <input id="shareUrl" readonly onclick="this.select()">
+    <button id="shareCopy">复制</button>
+  </div>
+  <small>把链接发给对方，他们点开就能看字幕——<b>你的屏幕共享可以继续放文档</b>。
+         对方只能看，改不了你这边。关掉分享链接立即失效。</small>
+</div>
+
+<div id="pausedBar">
+  ⏸ 已暂停
+  <small>不识别、不翻译，不产生任何调用</small>
+  <button id="resume">继续</button>
+</div>
+
+<div id="live" hidden>
+  <span id="liveWho">我方</span>
+  <span class="dots"><i></i><i></i><i></i></span>
+  <span id="liveText"></span>
+</div>
+
+<div id="toast" hidden>
+  <span class="spin"></span>
+  <span class="msg"></span>
+  <button id="toastOpen" hidden>打开文件夹</button>
+  <button id="toastClose">✕</button>
+</div>
+
+<main id="main">
+  <div class="empty" id="empty">
+    <b>等待发言…</b>
+    说中文 → 自动翻成泰语　｜　พูดไทย → 自动翻成中文<br>
+    最新的一句显示在最上面，不用追着滚动条看<br>
+    <span style="opacity:.75">快捷键　<kbd>P</kbd> 暂停　<kbd>F</kbd> 大字幕　<kbd>D</kbd> 紧凑　<kbd>S</kbd> 隐藏原文　<kbd>C</kbd> 清屏　<kbd>M</kbd> 生成纪要</span>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const main = $('main'), empty = $('empty');
+const parts = new Map();          // 每条发言 id -> {row, src, dst}
+let block = null;                 // 当前累积中的那一块（同一人连续说的话）
+const MERGE_GAP = 8, MERGE_MAX = 10;
+let ws, ttsOn = false, onTop = false;
+let muted = {me:false, them:false}, locks = {me:null, them:null};
+
+/* ---------------- 偏好（记在本机） ---------------- */
+const pref = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(_){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(_){} }
+};
+let fs = parseInt(pref.get('fs', '16'), 10);
+let newestFirst = pref.get('order', '1') === '1';   // 默认最新在上
+
+/* ---------------- WebSocket ---------------- */
+function connect(){
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => {
+    $('dot').classList.add('on');
+    // 恢复上次的置顶选择。窗口是每次启动新开的，置顶状态不会自己保留。
+    if(pref.get('top', '0') === '1') send({action:'topmost', on:true});
+  };
+  ws.onclose = () => { $('dot').classList.remove('on'); $('engine').textContent='连接断开，重连中…'; setTimeout(connect, 1500); };
+  ws.onmessage = e => handle(JSON.parse(e.data));
+}
+function send(o){ try{ ws.send(JSON.stringify(o)); }catch(_){} }
+
+function handle(m){
+  if(m.type === 'status'){
+    const dev = Object.entries(m.devices||{}).map(([k,v])=>`${k} ${v}`).join('　');
+    $('engine').textContent = [m.asr, m.model, dev].filter(Boolean).join('　·　');
+    muted = m.muted || muted;
+    $('mMic').classList.toggle('off', !!muted.me);
+    $('mSys').classList.toggle('off', !!muted.them);
+    locks = m.locks || locks;
+    paintLock('lMic', locks.me);
+    paintLock('lSys', locks.them);
+    paintPause(!!m.paused);
+    paintFast(m);
+    // 这两个入口可以在 config.json 里彻底关掉（不想误点、或发给别人时）
+    if('fast_enabled' in m || 'share_enabled' in m){
+      const f = m.fast_enabled !== false, s = m.share_enabled !== false;
+      $('fast').hidden = !f;
+      $('share').hidden = !s;
+      $('optSect').hidden = !f && !s;
+    }
+  }
+  else if(m.type === 'topmost'){
+    // 以服务端实际查到的窗口状态为准，不要用点击时的乐观假设
+    onTop = !!m.on;
+    $('topV').textContent = onTop ? '开' : '关';
+    $('top').classList.toggle('active', onTop);
+  }
+  else if(m.type === 'share') paintShare(m);
+  else if(m.type === 'viewer'){
+    // 远端观众：把所有会影响对方那台机器的控件都去掉。
+    // 服务端也会拦一道——光藏按钮不算数，自己拼消息照样能发。
+    document.body.classList.add('viewer');
+    $('viewerTag').textContent = '只看字幕';
+  }
+  else if(m.type === 'retract') retract(m);
+  else if(m.type === 'minutes') showMinutes(m);
+  else if(m.type === 'partial') showLive(m);
+  else if(m.type === 'utterance'){ hideLive(m.item.channel); addRow(m.item); }
+  else if(m.type === 'delta') appendDelta(m);
+  else if(m.type === 'translation') fillRow(m);
+  else if(m.type === 'cleared'){
+    parts.clear(); block = null;
+    main.querySelectorAll('.row').forEach(n=>n.remove());
+    empty.style.display='';
+  }
+}
+
+/* ---------------- 正在说话 ---------------- */
+let liveCh = null;
+function showLive(m){
+  const bar = $('live');
+  if(!m.text){ if(m.channel === liveCh) hideLive(m.channel); return; }
+  liveCh = m.channel;
+  bar.classList.toggle('them', m.channel === 'them');
+  $('liveWho').textContent = m.speaker || (m.channel === 'me' ? '我方' : '对方');
+  $('liveText').textContent = m.text;
+  bar.hidden = false;
+}
+function hideLive(ch){
+  if(ch && ch !== liveCh) return;
+  liveCh = null;
+  $('live').hidden = true;
+  $('liveText').textContent = '';
+}
+
+/* ---------------- 数字高亮 ----------------
+   语音识别最危险的是数字听错（实测泰语 13 被听成 3），而错的数字本身
+   是合法的，翻译环节救不回来。只能标出来让双方一眼核对。 */
+const NUM = /(\d[\d,.:：]*\d|\d|[〇零一二两三四五六七八九十百千万亿]{2,}|[๐-๙]+)/g;
+function withNumbers(el, text){
+  el.textContent = '';
+  let last = 0;
+  for(const m of text.matchAll(NUM)){
+    if(m.index > last) el.append(text.slice(last, m.index));
+    const b = document.createElement('b');
+    b.className = 'num'; b.textContent = m[0];
+    el.append(b);
+    last = m.index + m[0].length;
+  }
+  if(last < text.length) el.append(text.slice(last));
+}
+
+/* ---------------- 字幕 ---------------- */
+const LANG = {zh:'中文', th:'ไทย'};
+
+function addRow(it){
+  if(parts.has(it.id)) return;
+  empty.style.display = 'none';
+
+  const merge = block && block.channel === it.channel &&
+                it.ts - block.lastTs < MERGE_GAP && block.count < MERGE_MAX;
+  let row;
+  if(merge){
+    row = block.row; block.count++; block.lastTs = it.ts;
+  } else {
+    row = document.createElement('div');
+    row.className = 'row ' + it.channel;
+    row.innerHTML = `
+      <div class="meta">
+        <span class="who">${it.speaker}</span>
+        <span class="tag">${LANG[it.src_lang]||it.src_lang} → ${LANG[it.tgt_lang]||it.tgt_lang}</span>
+        <span>${new Date(it.ts*1000).toLocaleTimeString('zh-CN',{hour12:false})}</span>
+        <span class="lag"></span>
+      </div>
+      <div class="src"></div>
+      <div class="dst"></div>`;
+    // 最新在上：插到最前面，视线不用跟着滚动条跑
+    if(newestFirst) main.insertBefore(row, main.firstChild);
+    else main.appendChild(row);
+    block = {channel: it.channel, row, lastTs: it.ts, count: 1};
+    markNewest(row);
+  }
+
+  const lag = row.querySelector('.lag');
+  lag.textContent = `+${(it.lag||0).toFixed(1)}s`;
+  lag.className = 'lag' + (it.lag>=6 ? ' bad' : (it.lag>=3.5 ? ' warn' : ''));
+
+  const src = document.createElement('span');
+  src.dataset.id = it.id;
+  withNumbers(src, it.text);
+  src.title = '点一下可以改识别错的字';
+  src.onclick = () => startEdit(it.id, src);
+  row.querySelector('.src').appendChild(src);
+
+  const dst = document.createElement('span');
+  dst.dataset.id = it.id;
+  dst.className = 'wait';
+  dst.textContent = '翻译中';
+  row.querySelector('.dst').appendChild(dst);
+
+  parts.set(it.id, {row, src, dst});
+  if(it.translation) fillRow({id:it.id, translation:it.translation});
+
+  while(main.querySelectorAll('.row').length > 40){
+    const rows = main.querySelectorAll('.row');
+    (newestFirst ? rows[rows.length-1] : rows[0]).remove();
+  }
+  while(parts.size > 300) parts.delete(parts.keys().next().value);
+  keepInView();
+}
+
+/* 事后认出是回声的那条。不直接删掉——投屏时一行字幕凭空消失，
+   对面只会以为程序出错了。缩成一行灰字并标明原因，既不占地方也交代清楚。 */
+function retract(m){
+  const p = parts.get(m.id); if(!p) return;
+  p.src.classList.add('nosub','echo');
+  p.dst.hidden = true;
+  p.dst.textContent = '';
+  p.src.onclick = null;              // 回声没有改字的必要
+  p.src.title = '这句是音箱漏进麦克风的回声，已忽略';
+  markRowDensity(p.row);
+  keepInView();
+}
+
+/* 同一块里可能合并了同一个人连说的好几句。整块都没内容时才压掉整行；
+   只要还有一句是有内容的，这块就得保持正常，不能把有用的那句也压小。 */
+function markRowDensity(row){
+  const spans = row.querySelectorAll('.src span');
+  const all = spans.length > 0 &&
+              [...spans].every(s => s.classList.contains('nosub'));
+  row.classList.toggle('allnosub', all);
+}
+
+function markNewest(row){
+  main.querySelectorAll('.row.newest').forEach(r => r.classList.remove('newest'));
+  row.classList.add('newest');
+}
+
+function appendDelta(m){
+  const p = parts.get(m.id); if(!p) return;
+  if(p.dst.classList.contains('wait')){
+    p.dst.classList.remove('wait'); p.dst.classList.add('typing');
+    p.dst.textContent = '';
+  }
+  p.dst.textContent += m.text;
+  keepInView();
+}
+
+function fillRow(m){
+  const p = parts.get(m.id); if(!p) return;
+  p.dst.classList.remove('wait','typing');
+
+  /* 译文是空的 = 模型判定这句没有实质内容（多半是把噪音听成了词）。
+     实测三场会议 1012 条字幕里有 56 条是这样，窗口只占 1/4 屏时很占地方。
+     不删掉它——凭空消失会让人以为程序把话弄丢了——缩成一行小灰字，
+     原文还在，想看点开就是，但不再占用一整块。 */
+  const blank = !(m.translation || '').trim();
+  p.src.classList.toggle('nosub', blank);
+  p.dst.classList.toggle('empty-tr', blank);
+  p.dst.hidden = blank;
+  markRowDensity(p.row);
+  if(blank){ keepInView(); return; }
+
+  withNumbers(p.dst, m.translation);
+  if(m.tgt_lang) p.dst.lang = m.tgt_lang === 'th' ? 'th-TH' : 'zh-CN';
+  keepInView();
+  if(ttsOn) speak(m.translation, m.tgt_lang);
+}
+
+/* 最新在上时停在顶部；最新在下时才需要滚到底 */
+function keepInView(){
+  if(newestFirst) main.scrollTop = 0;
+  else main.scrollTop = main.scrollHeight;
+}
+
+/* ---------------- 点原文改错字 ----------------
+   提交有三条路：按钮、回车、失焦。单靠回车不行——
+   中文输入法的第一个回车会被拿去确认候选词，传不到这里。 */
+function startEdit(id, src){
+  if(src.dataset.editing === '1') return;
+  src.dataset.editing = '1';
+  const before = src.textContent;
+
+  src.contentEditable = 'true';
+  src.focus();
+  document.getSelection().selectAllChildren(src);
+
+  const bar = document.createElement('div');
+  bar.className = 'editbar';
+  bar.innerHTML = '<button class="ok">✓ 重新翻译</button>' +
+                  '<button class="no">✕ 取消</button>' +
+                  '<span>回车提交 · Esc 取消</span>';
+  src.closest('.src').after(bar);
+
+  let done = false;
+  const finish = (save) => {
+    if(done) return;
+    done = true;
+    src.dataset.editing = '0';
+    src.contentEditable = 'false';
+    src.onkeydown = src.onblur = null;
+    bar.remove();
+
+    const now = src.textContent.trim();
+    if(save && now && now !== before.trim()){
+      const p = parts.get(id);
+      if(p){
+        p.src.classList.add('edited');
+        // 这一句原先可能被判成"无实质内容"缩起来了（译文区是隐藏的）。
+        // 人既然动手改了它，就得先展开，否则「重新翻译中」根本看不见。
+        p.src.classList.remove('nosub');
+        p.dst.hidden = false;
+        p.dst.classList.remove('typing','empty-tr');
+        p.dst.classList.add('wait');
+        p.dst.textContent = '重新翻译中';
+        markRowDensity(p.row);
+      }
+      send({action:'retranslate', id, text: now});
+    } else {
+      withNumbers(src, before);
+    }
+  };
+
+  bar.querySelector('.ok').onmousedown = e => { e.preventDefault(); finish(true); };
+  bar.querySelector('.no').onmousedown = e => { e.preventDefault(); finish(false); };
+
+  src.onkeydown = e => {
+    const composing = e.isComposing || e.keyCode === 229;
+    const enter = e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13;
+    const esc = e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27;
+    if(enter && !composing){ e.preventDefault(); finish(true); }
+    else if(esc && !composing){ e.preventDefault(); finish(false); }
+    e.stopPropagation();
+  };
+  src.onblur = () => setTimeout(() => finish(true), 150);
+}
+
+/* ---------------- 朗读 ---------------- */
+function speak(text, lang){
+  if(!window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang === 'th' ? 'th-TH' : 'zh-CN';
+  const v = speechSynthesis.getVoices().find(x => x.lang.toLowerCase().startsWith(u.lang.slice(0,2)));
+  if(v) u.voice = v;
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+
+/* ---------------- 语言锁 ----------------
+   短语（"ครับ"这类）的语种判定本来就在噪声里比大小，会判错。
+   对方全程只说一种语言时，锁死是唯一可靠的办法。 */
+const CYCLE = [null, 'zh', 'th'];
+const LOCK_TEXT = {null:'自动', zh:'中文', th:'ไทย'};
+function paintLock(btn, lang){
+  const b = $(btn);
+  b.textContent = LOCK_TEXT[lang] || '自动';
+  b.classList.toggle('locked', !!lang);
+}
+function cycleLock(ch, btn){
+  const next = CYCLE[(CYCLE.indexOf(locks[ch] || null) + 1) % CYCLE.length];
+  locks[ch] = next;
+  paintLock(btn, next);
+  send({action:'lock', channel:ch, lang:next});
+}
+
+/* ---------------- 控件 ---------------- */
+function setFs(v){
+  fs = Math.max(11, Math.min(80, v));
+  document.documentElement.style.setProperty('--fs', fs + 'px');
+  pref.set('fs', fs);
+}
+function toggle(cls, btn, key, label){
+  const on = document.body.classList.toggle(cls);
+  $(btn).classList.toggle('active', on);
+  if(label) $(label).textContent = on ? '开' : '关';
+  pref.set(key, on ? '1' : '0');
+  keepInView();
+  return on;
+}
+
+$('more').onclick = e => { e.stopPropagation(); $('menu').hidden = !$('menu').hidden; };
+document.addEventListener('click', () => { $('menu').hidden = true; });
+$('menu').onclick = e => e.stopPropagation();
+
+$('plus').onclick  = () => setFs(fs + 2);
+$('minus').onclick = () => setFs(fs - 2);
+$('mode').onclick  = () => toggle('big', 'mode', 'big');
+$('dense').onclick = () => toggle('dense', 'dense', 'dense');
+$('nosrc').onclick = () => toggle('nosrc', 'nosrc', 'nosrc');
+$('theme').onclick = () => toggle('dark', 'theme', 'dark', 'themeV');
+$('tts').onclick   = () => {
+  ttsOn = !ttsOn;
+  $('tts').classList.toggle('active', ttsOn);
+  $('ttsV').textContent = ttsOn ? '开' : '关';
+  if(!ttsOn) speechSynthesis.cancel();
+};
+/* 窗口置顶：浏览器没有这个开关，得让本地服务端调 Windows API 去设。
+   投屏时共享的是这个窗口本身，被别的窗口盖住对方就看不到字幕了。 */
+$('top').onclick = () => {
+  onTop = !onTop;
+  pref.set('top', onTop ? '1' : '0');
+  send({action:'topmost', on: onTop});
+};
+
+$('order').onclick = () => {
+  newestFirst = !newestFirst;
+  pref.set('order', newestFirst ? '1' : '0');
+  $('orderV').textContent = newestFirst ? '是' : '否';
+  $('order').classList.toggle('active', newestFirst);
+  // 原地把已有的块倒过来，不用重新连接
+  const rows = [...main.querySelectorAll('.row')].reverse();
+  rows.forEach(r => main.appendChild(r));
+  keepInView();
+};
+$('clear').onclick = () => send({action:'clear'});
+$('full').onclick  = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+
+/* ---------------- 会议纪要 ---------------- */
+let minutesPath = '';
+$('minutes').onclick = () => {
+  // 两小时的会要先分段提要再合成，实测一两分钟，先说清楚免得以为卡住了
+  showToast('working', '正在整理会议纪要…长一点的会需要一两分钟');
+  send({action:'minutes'});
+};
+$('toastClose').onclick = () => { $('toast').hidden = true; };
+$('toastOpen').onclick  = () => send({action:'open_folder', path: minutesPath});
+
+function showToast(state, msg, sub){
+  const t = $('toast');
+  t.hidden = false;
+  t.className = state === 'done' ? 'done' : (state === 'error' ? 'err' : '');
+  t.querySelector('.msg').innerHTML =
+    esc(msg) + (sub ? `<span class="path">${esc(sub)}</span>` : '');
+  $('toastOpen').hidden = state !== 'done';
+}
+function esc(s){
+  return String(s).replace(/[&<>"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function showMinutes(m){
+  if(m.state === 'done'){
+    minutesPath = m.docx || m.md || '';
+    showToast('done', m.message || '会议纪要已生成', minutesPath);
+  } else if(m.state === 'error'){
+    showToast('error', '生成失败：' + (m.message || ''));
+  } else {
+    showToast('working', m.message || '正在整理…');
+  }
+}
+/* 暂停：会开完了人还在屋里说话，照样识别+翻译，钱就这么流走了。
+   以服务端回的状态为准，不做乐观更新——按钮显示的必须是真实状态。 */
+let paused = false;
+function paintPause(on){
+  paused = !!on;
+  document.body.classList.toggle('paused', paused);
+  $('pause').classList.toggle('on', paused);
+  $('pause').textContent = paused ? '▶ 继续' : '暂停';
+  if(paused) hideLive();          // 不传声道 = 无论当前是哪一路都撤掉
+}
+const togglePause = () => send({action:'pause', value: !paused});
+$('pause').onclick  = togglePause;
+$('resume').onclick = togglePause;
+
+/* 极速模式（流式识别）。平时用不着——它按音频秒数计费且没有免费额度，
+   重要会议再开。开着的时候旁边实时显示花了多少，免得开完会才发现忘了关。 */
+let fast = false;
+function paintFast(m){
+  fast = !!m.fast;
+  document.body.classList.toggle('fast', fast);
+  $('fastV').textContent = fast ? '开' : '关';
+  $('fast').classList.toggle('active', fast);
+  if(fast){
+    $('fastChip').textContent =
+      `⚡ ${m.fast_minutes||0} 分钟 · ¥${(m.fast_cost||0).toFixed(2)}`;
+  }
+  if(m.fast_error) showFastError(m.fast_error);
+}
+function showFastError(msg){
+  const t = $('toast');
+  t.textContent = '极速模式开不了：' + msg;
+  t.style.whiteSpace = 'pre-line';
+  t.hidden = false;                 // 这个元素用 hidden 属性控制，不是 style
+  clearTimeout(showFastError._t);
+  showFastError._t = setTimeout(() => { t.hidden = true;
+                                        t.style.whiteSpace = ''; }, 12000);
+}
+/* 公网分享：对方点链接就能看字幕，你的屏幕共享继续放文档。 */
+let sharing = false;
+function paintShare(m){
+  sharing = !!m.on;
+  document.body.classList.toggle('sharing', sharing);
+  $('shareV').textContent = m.busy ? '连接中…' : (sharing ? '开' : '关');
+  $('share').classList.toggle('active', sharing);
+  if(m.url) $('shareUrl').value = m.url;
+  $('shareViewers').textContent = m.viewers ? `${m.viewers} 人在看` : '还没有人打开';
+  if(m.error) showFastError(m.error);
+}
+$('share').onclick    = () => send({action:'share', value: !sharing});
+$('shareOff').onclick = () => send({action:'share', value:false});
+$('shareCopy').onclick = async () => {
+  const el = $('shareUrl');
+  try{ await navigator.clipboard.writeText(el.value); }
+  catch(_){ el.select(); document.execCommand('copy'); }
+  const b = $('shareCopy'); b.textContent = '已复制';
+  setTimeout(() => b.textContent = '复制', 1500);
+};
+
+const toggleFast = () => send({action:'fast', value: !fast});
+$('fast').onclick = toggleFast;
+$('fastChip').onclick = toggleFast;     // 小标直接点就能关掉
+
+$('mMic').onclick  = () => send({action:'mute', channel:'me',   value:!muted.me});
+$('mSys').onclick  = () => send({action:'mute', channel:'them', value:!muted.them});
+$('lMic').onclick  = () => cycleLock('me', 'lMic');
+$('lSys').onclick  = () => cycleLock('them', 'lSys');
+
+document.addEventListener('keydown', e => {
+  if(e.target.tagName === 'INPUT' || e.target.isContentEditable) return;
+  const k = e.key.toLowerCase();
+  if(k === 'f') $('mode').click();
+  else if(k === 'd') $('dense').click();
+  else if(k === 's') $('nosrc').click();
+  else if(k === 'c') $('clear').click();
+  else if(k === 'm') $('minutes').click();
+  else if(k === 'p') togglePause();
+  else if(e.key === '+' || e.key === '=') setFs(fs + 2);
+  else if(e.key === '-') setFs(fs - 2);
+});
+
+/* ---------------- 启动 ---------------- */
+setFs(fs);
+$('orderV').textContent = newestFirst ? '是' : '否';
+$('order').classList.toggle('active', newestFirst);
+for(const [cls, btn, key] of [['dense','dense','dense'], ['nosrc','nosrc','nosrc'], ['dark','theme','dark']]){
+  if(pref.get(key, cls === 'dense' ? '1' : '0') === '1'){
+    document.body.classList.add(cls);
+    $(btn).classList.add('active');
+  }
+}
+$('themeV').textContent = document.body.classList.contains('dark') ? '开' : '关';
+connect();
+</script>
+</body>
+</html>

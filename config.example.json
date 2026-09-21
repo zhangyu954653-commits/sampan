@@ -1,0 +1,118 @@
+{
+  "anthropic_api_key": "",
+  "anthropic_base_url": "",
+  "translate_backend": "anthropic",
+  "openai_api_key": "",
+  "openai_base_url": "",
+  "openai_translate_model": "gpt-5.6-luna",
+  "model": "claude-sonnet-5",
+  "context_turns": 4,
+  "disable_thinking": true,
+  "speaker_gender": "",
+  "cache_max_chars": 28,
+  "asr": {
+    "backend": "tencent",
+    "tencent_secret_id": "",
+    "tencent_secret_key": "",
+    "tencent_engines": {
+      "zh": "16k_zh",
+      "th": "16k_th"
+    },
+    "model_size": "auto",
+    "device": "auto",
+    "compute_type": "auto",
+    "beam_size": 1,
+    "cpu_threads": 0,
+    "lang_detect_model": "tiny",
+    "language_bias_strength": 2.5,
+    "partial_results": true,
+    "partial_model": "tiny",
+    "partial_min_sec": 1.0,
+    "partial_interval_sec": 1.1,
+    "verify_language": true,
+    "verify_logprob": -0.95,
+    "verify_margin": 0.15,
+    "openai_api_key": "",
+    "openai_model": "gpt-transcribe",
+    "openai_prompt": "",
+    "tencent_appid": ""
+  },
+  "language_bias": {
+    "me": null,
+    "them": null
+  },
+  "language_lock": {
+    "me": null,
+    "them": null
+  },
+  "audio": {
+    "enable_mic": true,
+    "enable_loopback": true,
+    "mic_device_index": null,
+    "loopback_device_index": null,
+    "mic_gain": 1.0,
+    "loopback_gain": 1.0
+  },
+  "vad": {
+    "aggressiveness": 3,
+    "start_frames": 4,
+    "end_frames": 38,
+    "preroll_ms": 320,
+    "max_seconds": 15.0,
+    "min_seconds": 0.4,
+    "rms_threshold": 0.012
+  },
+  "max_lag_sec": 6.0,
+  "echo_cancel": {
+    "enabled": true,
+    "mode": "on",
+    "corr": 0.85,
+    "short_corr": 0.95,
+    "cover": 0.7,
+    "short_sec": 1.5,
+    "max_delay_ms": 700,
+    "lock_tol_ms": 120,
+    "tail_ms": 300,
+    "ref_floor": 0.004
+  },
+  "dedupe_window_sec": 10.0,
+  "dedupe_ratio": 0.65,
+  "drop_fillers": true,
+  "quick_replies": true,
+  "stream_asr": false,
+  "stream_wait_sec": 2.5,
+  "fast_enabled": true,
+  "share_enabled": true,
+  "save_transcript": true,
+  "transcript_dir": "会议记录",
+  "save_log": true,
+  "auto_minutes": false,
+  "minutes_model": "",
+  "minutes_effort": "medium",
+  "minutes_timeout": 600.0,
+  "minutes_max_tokens": 32000,
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "open_browser": true,
+    "window_mode": "app",
+    "window_size": [
+      900,
+      620
+    ]
+  },
+  "asr_corrections": {
+    "厌厂": "验厂",
+    "验场": "验厂",
+    "香烟厂": "香烟厂"
+  },
+  "glossary": {
+    "验厂": "ตรวจโรงงาน",
+    "验货": "ตรวจสอบสินค้า",
+    "客诉": "ข้อร้องเรียนจากลูกค้า",
+    "产能": "กำลังการผลิต",
+    "报价单": "ใบเสนอราคา",
+    "王经理": "ผู้จัดการหวัง"
+  },
+  "domain_hint": "线上商务会议，议题包括生产、品质、交期"
+}

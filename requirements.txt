@@ -1,0 +1,24 @@
+# 音频采集（Windows WASAPI 环回，无需虚拟声卡）
+PyAudioWPatch>=0.2.12.5
+
+# 数值 / 重采样
+numpy>=1.24
+soxr>=0.3.7
+
+# 语音活动检测（分句）
+webrtcvad-wheels>=2.0.14
+
+# 本地语音识别（自动语种检测）
+faster-whisper>=1.0.3
+
+# 繁体转简体（Whisper 的中文输出经常是繁体）
+opencc-python-reimplemented>=0.1.7
+
+# 翻译
+anthropic>=0.40.0
+
+# 本地 Web 界面 + WebSocket
+aiohttp>=3.9
+
+# 可选：如果 asr.backend 设为 "openai"，才需要
+# openai>=1.40.0

@@ -1,0 +1,16 @@
+# 统一换行符：仓库里一律存 LF，Windows 上检出时再转成 CRLF。
+# 不统一的话，Linux / macOS 用户拉下来会看到满屏 ^M，
+# 而且每次提交都可能整个文件显示成"全部改过"。
+* text=auto eol=lf
+
+# .bat 必须是 CRLF，否则 Windows 上双击可能执行异常
+*.bat text eol=crlf
+
+# 二进制文件不要做换行转换
+*.png binary
+*.jpg binary
+*.ico binary
+*.docx binary
+*.zip binary
+*.bin binary
+*.onnx binary
