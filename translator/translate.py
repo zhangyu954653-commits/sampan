@@ -1,6 +1,7 @@
 """调用 Claude 做中↔泰翻译。为会议口语场景优化：短、准、只出译文。"""
 from __future__ import annotations
 
+import asyncio
 import re
 
 LANG_NAME = {"zh": "中文（简体）", "th": "泰语"}
@@ -97,6 +98,8 @@ class Translator:
         self.cache_max_chars = int(cfg.get("cache_max_chars", 28))
         self._cache: dict[tuple, str] = {}
         self._cache_order: list[tuple] = []
+        # 正在翻的句子，防止同一句话同时打两次 API（见 translate_stream）
+        self._inflight: dict[tuple, asyncio.Future] = {}
 
         from anthropic import AsyncAnthropic
 
@@ -241,15 +244,44 @@ class Translator:
             await on_delta(hit)      # 命中缓存就一次推完，几毫秒的事
             return hit
 
-        buf = []
-        async with self.client.messages.stream(
-                **self._build(text, src, tgt, context, fragment)) as stream:
-            async for chunk in stream.text_stream:
-                if not chunk:
-                    continue
-                buf.append(chunk)
-                await on_delta(chunk)
+        # 同一句话已经在翻了：等它的结果，别再打一次 API。
+        # 缓存只在译完之后才写得进去，所以**同一句话同时在飞**的时候
+        # 两边会各打一次，还可能译出两个版本。实测遇到过：
+        # 本场第一句冷启动要 4.5 秒，第二句 3 秒后就到了，
+        # 同样一句"喂，可以听到我说话吗？"译出了两种说法。
+        if key is not None and key in self._inflight:
+            try:
+                out = await asyncio.shield(self._inflight[key])
+                if out:
+                    await on_delta(out)
+                    return out
+            except Exception:
+                pass          # 那一边失败了，自己重新翻一次
 
-        out = _final("".join(buf))
-        self._cache_put(key, out)
-        return out
+        fut = asyncio.get_running_loop().create_future() if key else None
+        if fut is not None:
+            self._inflight[key] = fut
+
+        buf = []
+        try:
+            async with self.client.messages.stream(
+                    **self._build(text, src, tgt, context, fragment)) as stream:
+                async for chunk in stream.text_stream:
+                    if not chunk:
+                        continue
+                    buf.append(chunk)
+                    await on_delta(chunk)
+
+            out = _final("".join(buf))
+            self._cache_put(key, out)
+            if fut is not None and not fut.done():
+                fut.set_result(out)          # 等着的那一边可以直接用了
+            return out
+        except Exception as e:
+            # 失败也要唤醒等待方，否则它会一直挂着
+            if fut is not None and not fut.done():
+                fut.set_exception(e)
+            raise
+        finally:
+            if key is not None:
+                self._inflight.pop(key, None)

@@ -131,6 +131,11 @@ class Pipeline:
         # 而且境外调用要单独开通跨境版。开关在 config.json 的 stream_asr。
         self.stream = None
         self.stream_wait = float(cfg.get("stream_wait_sec", 2.5))
+        # 每一路最近听到的音量和时刻。会前检查靠它判断
+        # "麦克风到底有没有声音进来"——这是开会时最常见的故障，
+        # 而且不说话的时候从界面上完全看不出来。
+        self.heard = {"me": {"peak": 0.0, "ts": 0.0},
+                      "them": {"peak": 0.0, "ts": 0.0}}
         self.fast_error = ""          # 极速模式开不了时，把原因告诉界面
         lock = cfg.get("language_lock") or {}
         self.locks = {"me": lock.get("me"), "them": lock.get("them")}
@@ -286,6 +291,11 @@ class Pipeline:
                     # 音箱在放什么。对方这一路即使被静音了也要存——
                     # 静音只是不出字幕，音箱照样在响，回声照样会漏进麦克风。
                     self.echo.push_reference(pcm, now)
+                lvl = float(abs(pcm).max()) if len(pcm) else 0.0
+                h = self.heard[channel]
+                if lvl > 0.004:            # 高于底噪才算"听到了"
+                    h["ts"] = now
+                h["peak"] = max(h["peak"] * 0.97, lvl)   # 缓慢回落的峰值
                 seg = self.segmenters[channel]
                 was = seg.speaking
                 finished = seg.push(pcm, now)
@@ -301,6 +311,83 @@ class Pipeline:
             for ch, seg in self.segmenters.items():
                 if ch != channel:
                     self._dispatch(ch, seg.tick(now), now)
+
+    async def precheck(self) -> dict:
+        """会前检查：查真正会出问题的东西，不是重复启动时那几行。
+
+        实际开会翻车的就那么几种：麦克风没插好 / 钉钉声音没走到环回设备 /
+        密钥过期 / 忘了关按秒计费的极速模式。这几样在不说话的时候
+        从界面上完全看不出来，非得等会开起来才发现。
+        """
+        now = time.time()
+        items = []
+
+        # 1. 两路音频最近有没有真的听到声音
+        for ch in ("me", "them"):
+            dev = self.status["devices"].get(ch)
+            h = self.heard[ch]
+            quiet = now - h["ts"] if h["ts"] else 9999
+            label = "麦克风（你说话）" if ch == "me" else "系统声音（对方说话）"
+            if not dev:
+                items.append({"k": label, "ok": False,
+                              "v": "设备没启用", "hint": "检查 config.json 的 audio 段"})
+            elif self.muted.get(ch):
+                items.append({"k": label, "ok": False, "v": "被你手动静音了",
+                              "hint": "顶栏点一下那一路就能打开"})
+            elif quiet < 12:
+                items.append({"k": label, "ok": True,
+                              "v": f"有声音（{int(h['peak'] * 100)}%）　{dev}"})
+            else:
+                hint = ("说句话试试；没反应就检查麦克风插没插好、"
+                        "是不是被别的程序独占了"
+                        if ch == "me" else
+                        "在钉钉里放点声音试试；没反应说明钉钉的声音"
+                        "没走到这个扬声器设备上")
+                items.append({"k": label, "ok": False,
+                              "v": f"最近 {'一直' if quiet > 9000 else f'{int(quiet)} 秒'}没听到声音",
+                              "hint": hint})
+
+        # 2. 翻译真打一次，别等开会才发现密钥过期
+        if self.translator is None:
+            items.append({"k": "翻译", "ok": False,
+                          "v": self.translate_error or "没启用",
+                          "hint": "检查 config.json 里对应后端的 API Key"})
+        else:
+            who = ("OpenAI" if str(self.cfg.get("translate_backend", "anthropic")
+                                   ).lower() == "openai" else "Anthropic")
+            model = getattr(self.translator, "model", "?")
+            t0 = time.time()
+            try:
+                out = await asyncio.wait_for(
+                    self.translator.translate("测试", "zh", "th", []), timeout=25)
+                items.append({"k": "翻译", "ok": bool(out),
+                              "v": f"{who} {model}　{time.time() - t0:.1f}s"
+                                   f"　→ {out or '（空）'}"})
+            except Exception as e:
+                items.append({"k": "翻译", "ok": False,
+                              "v": friendly_error(
+                                  e, self.cfg.get("translate_backend", "anthropic")),
+                              "hint": f"后端 {who}，模型 {model}"})
+
+        # 3. 识别引擎
+        items.append({"k": "语音识别", "ok": bool(self.status.get("asr")),
+                      "v": self.status.get("asr") or "没就绪"})
+
+        # 4. 会花钱 / 会对外的开关，开会前必须让人看见
+        if self.stream is not None:
+            items.append({"k": "⚡ 极速模式", "ok": True, "warn": True,
+                          "v": "开着——按音频秒数计费，约 ¥8.6/小时音频",
+                          "hint": "只在重要会议开，平时关掉"})
+        if getattr(self, "_server_share", None):
+            items.append({"k": "🔗 分享链接", "ok": True, "warn": True,
+                          "v": "开着——拿到链接的人能看到接下来的字幕"})
+        if self.paused:
+            items.append({"k": "暂停", "ok": False, "v": "还停着，不会出字幕",
+                          "hint": "按 P 或点顶栏的「继续」"})
+
+        bad = [i for i in items if not i["ok"]]
+        return {"type": "precheck", "items": items,
+                "ok": not bad, "bad": len(bad)}
 
     async def set_fast(self, value: bool) -> dict:
         """开/关极速模式（流式识别）。

@@ -94,6 +94,21 @@
   /* 这两项可以在 config.json 里彻底关掉（share_enabled / 无腾讯云流式时） */
   .menu button[hidden], .menu .sect[hidden]{display:none}
 
+  /* 会前检查结果 */
+  #preBar{padding:8px 12px; background:var(--card-2);
+          border-bottom:1px solid var(--line); font-size:12px}
+  .pre-head{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+  .pre-head b{font-size:13px}
+  .pre-head button{margin-left:auto}
+  .pre-row{display:flex; gap:8px; padding:3px 0; align-items:flex-start}
+  .pre-row .ico{flex:0 0 auto; width:16px; text-align:center; font-weight:700}
+  .pre-row.ok .ico{color:var(--ok)}
+  .pre-row.bad .ico{color:var(--bad)}
+  .pre-row.warn .ico{color:var(--warn)}
+  .pre-row .k{flex:0 0 auto; min-width:104px; color:var(--muted)}
+  .pre-row .v{flex:1 1 auto; min-width:0; word-break:break-word}
+  .pre-row .hint{display:block; color:var(--faint); font-size:11px; margin-top:1px}
+
   /* 分享面板 */
   #sharePanel{display:none; padding:8px 12px; background:var(--card-2);
               border-bottom:1px solid var(--line)}
@@ -321,6 +336,7 @@
         <button id="tts">朗读译文 <i id="ttsV">关</i></button>
         <!-- 下面这两项和上面性质不同：一个花钱、一个对外开链接。
              混在显示选项里容易误点，所以单独分出来并标明。 -->
+        <button id="precheck">🩺 会前检查 <i>查一遍</i></button>
         <div class="sect" id="optSect">按需开启 · 平时不用</div>
         <button id="fast" title="边说边识别，快约 1 秒。按音频秒数计费、没有免费额度">⚡ 极速模式 <i id="fastV">关</i></button>
         <button id="share" title="生成一条公网链接，对方点开就能看字幕，不用再共享屏幕">🔗 分享字幕 <i id="shareV">关</i></button>
@@ -330,9 +346,9 @@
           <button id="plus">A ＋</button>
         </div>
         <hr>
-        <button id="minutes">生成会议纪要 <i>M</i></button>
+        <button id="minutes">生成会议纪要 <i>⇧M</i></button>
         <hr>
-        <button id="clear">清屏 <i>C</i></button>
+        <button id="clear">清屏 <i>⇧C</i></button>
         <button id="full">全屏</button>
       </div>
     </div>
@@ -352,6 +368,14 @@
   </div>
   <small>把链接发给对方，他们点开就能看字幕——<b>你的屏幕共享可以继续放文档</b>。
          对方只能看，改不了你这边。关掉分享链接立即失效。</small>
+</div>
+
+<div id="preBar" hidden>
+  <div class="pre-head">
+    <b id="preTitle">会前检查</b>
+    <button id="preClose">关闭</button>
+  </div>
+  <div id="preList"></div>
 </div>
 
 <div id="pausedBar">
@@ -378,7 +402,7 @@
     <b>等待发言…</b>
     说中文 → 自动翻成泰语　｜　พูดไทย → 自动翻成中文<br>
     最新的一句显示在最上面，不用追着滚动条看<br>
-    <span style="opacity:.75">快捷键　<kbd>P</kbd> 暂停　<kbd>F</kbd> 大字幕　<kbd>D</kbd> 紧凑　<kbd>S</kbd> 隐藏原文　<kbd>C</kbd> 清屏　<kbd>M</kbd> 生成纪要</span>
+    <span style="opacity:.75">快捷键　<kbd>P</kbd> 暂停　<kbd>F</kbd> 大字幕　<kbd>D</kbd> 紧凑　<kbd>S</kbd> 隐藏原文　<kbd>⇧C</kbd> 清屏　<kbd>⇧M</kbd> 生成纪要</span>
   </div>
 </main>
 
@@ -438,6 +462,7 @@ function handle(m){
     $('topV').textContent = onTop ? '开' : '关';
     $('top').classList.toggle('active', onTop);
   }
+  else if(m.type === 'precheck') showPrecheck(m);
   else if(m.type === 'share') paintShare(m);
   else if(m.type === 'viewer'){
     // 远端观众：把所有会影响对方那台机器的控件都去掉。
@@ -755,13 +780,27 @@ $('order').onclick = () => {
   rows.forEach(r => main.appendChild(r));
   keepInView();
 };
-$('clear').onclick = () => send({action:'clear'});
+/* 清屏和生成纪要都要确认一次。
+   清屏会把**远端观众的屏幕也一起清掉**，纪要则是一次真金白银的模型调用，
+   而它们原来都绑着单个字母，开会时手一滑就触发了。 */
+$('clear').onclick = () => {
+  const n = document.querySelectorAll('.row').length;
+  const who = sharing ? '（分享链接那边的人也会跟着清空）' : '';
+  if(n && !confirm(`确定清掉屏幕上这 ${n} 条字幕吗？${who}
+会议记录文件不受影响。`)) return;
+  send({action:'clear'});
+};
 $('full').onclick  = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 
 /* ---------------- 会议纪要 ---------------- */
 let minutesPath = '';
 $('minutes').onclick = () => {
-  // 两小时的会要先分段提要再合成，实测一两分钟，先说清楚免得以为卡住了
+  // 这是一次真实的模型调用：两小时的会要分段提要再合成，
+  // 实测一两分钟、要花钱。不确认的话按错一个键就白烧一次。
+  const n = document.querySelectorAll('.row').length;
+  if(!confirm(`根据当前 ${n} 条字幕生成会议纪要？
+` +
+              `会调用一次模型，长一点的会需要一两分钟。`)) return;
   showToast('working', '正在整理会议纪要…长一点的会需要一两分钟');
   send({action:'minutes'});
 };
@@ -848,6 +887,34 @@ $('shareCopy').onclick = async () => {
   setTimeout(() => b.textContent = '复制', 1500);
 };
 
+/* 会前检查：查的是真正会翻车的东西——麦克风有没有声音进来、
+   钉钉的声音走没走到环回设备、密钥还灵不灵、有没有忘了关按秒计费的极速模式。
+   这些在不说话的时候从界面上完全看不出来。 */
+$('precheck').onclick = () => {
+  $('menu').hidden = true;
+  $('preBar').hidden = false;
+  $('preTitle').textContent = '会前检查　正在查…';
+  $('preList').innerHTML = '<div class="pre-row"><span class="ico">…</span>' +
+    '<span class="v">正在试一次真实翻译，大约几秒</span></div>';
+  send({action:'precheck'});
+};
+$('preClose').onclick = () => { $('preBar').hidden = true; };
+function showPrecheck(m){
+  $('preBar').hidden = false;
+  $('preTitle').textContent = m.ok ? '会前检查　✓ 都正常，可以开会了'
+                                   : `会前检查　${m.bad} 项要处理`;
+  $('preList').innerHTML = (m.items||[]).map(it => {
+    const cls = it.ok ? (it.warn ? 'warn' : 'ok') : 'bad';
+    const ico = it.ok ? (it.warn ? '!' : '✓') : '✗';
+    const esc = t => String(t||'').replace(/[&<>]/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    return `<div class="pre-row ${cls}"><span class="ico">${ico}</span>` +
+      `<span class="k">${esc(it.k)}</span><span class="v">${esc(it.v)}` +
+      (it.hint ? `<span class="hint">${esc(it.hint)}</span>` : '') +
+      `</span></div>`;
+  }).join('');
+}
+
 const toggleFast = () => send({action:'fast', value: !fast});
 $('fast').onclick = toggleFast;
 $('fastChip').onclick = toggleFast;     // 小标直接点就能关掉
@@ -863,8 +930,10 @@ document.addEventListener('keydown', e => {
   if(k === 'f') $('mode').click();
   else if(k === 'd') $('dense').click();
   else if(k === 's') $('nosrc').click();
-  else if(k === 'c') $('clear').click();
-  else if(k === 'm') $('minutes').click();
+  // C 和 M 要按住 Shift。清屏会连远端观众一起清，纪要是一次付费调用——
+  // 这两个不该和"换个字号"一样一按就走。
+  else if(k === 'c' && e.shiftKey) $('clear').click();
+  else if(k === 'm' && e.shiftKey) $('minutes').click();
   else if(k === 'p') togglePause();
   else if(e.key === '+' || e.key === '=') setFs(fs + 2);
   else if(e.key === '-') setFs(fs - 2);

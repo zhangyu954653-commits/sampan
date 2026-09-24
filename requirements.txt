@@ -1,24 +1,23 @@
 # 音频采集（Windows WASAPI 环回，无需虚拟声卡）
 PyAudioWPatch>=0.2.12.5
-
 # 数值 / 重采样
 numpy>=1.24
 soxr>=0.3.7
-
 # 语音活动检测（分句）
 webrtcvad-wheels>=2.0.14
-
-# 本地语音识别（自动语种检测）
+# 本地语音识别（云端不可用时的兜底，也用来判语种和出中间结果）
 faster-whisper>=1.0.3
-
 # 繁体转简体（Whisper 的中文输出经常是繁体）
 opencc-python-reimplemented>=0.1.7
-
-# 翻译
+# 云端语音识别。默认配置 asr.backend 就是 "tencent"，
+# 少了它会静默退回本地模型——能用，但慢得多，而且用户不知道为什么慢。
+tencentcloud-sdk-python-asr>=3.0.1000
+# 翻译（默认后端）
 anthropic>=0.40.0
-
-# 本地 Web 界面 + WebSocket
+# 会议纪要导出 Word。少了它只会生成 Markdown，
+# 和「生成 Markdown + Word」的说明对不上。
+python-docx>=1.1.0
+# 本地 Web 界面 + WebSocket（分享字幕链接也用它）
 aiohttp>=3.9
-
-# 可选：如果 asr.backend 设为 "openai"，才需要
+# 可选：translate_backend 设为 "openai"，或 asr.backend 设为 "openai" 时才需要
 # openai>=1.40.0

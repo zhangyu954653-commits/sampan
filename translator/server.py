@@ -74,11 +74,17 @@ class Server:
             self.viewers.add(ws)
             await ws.send_json({"type": "viewer", "on": True})
 
-        # 新连接：补一份当前状态和历史字幕
+        # 新连接：补一份当前状态和历史字幕。
+        #
+        # **远端观众从"现在"开始看，不补历史。** 你多半是开会到一半才
+        # 把链接发给客户或供应商的，而这之前很可能刚讨论完报价底线、
+        # 内部分歧这些不该给对方看的内容。本机窗口照旧补最近 40 句，
+        # 那是你自己的屏幕。
         if self.pipeline is not None:
             await ws.send_json({"type": "status", **self.pipeline.public_status()})
-            for item in self.pipeline.history[-40:]:
-                await ws.send_json({"type": "utterance", "item": item})
+            if not viewer:
+                for item in self.pipeline.history[-40:]:
+                    await ws.send_json({"type": "utterance", "item": item})
         elif self.static_status:
             await ws.send_json({"type": "status", **self.static_status})
         await ws.send_json(self.share_status())
@@ -125,7 +131,11 @@ class Server:
 
         if self.pipeline is None:
             return
-        if action == "share":
+        if action == "precheck":
+            # 让 pipeline 知道分享有没有开着——会前检查要提醒这个
+            self.pipeline._server_share = bool(self.share_token and self.tunnel)
+            await self.broadcast(await self.pipeline.precheck())
+        elif action == "share":
             await self.set_share(bool(data.get("value")))
         elif action == "fast":
             await self.pipeline.set_fast(bool(data.get("value")))
