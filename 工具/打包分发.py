@@ -23,9 +23,11 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(__file__).resolve().parent.parent      # 这个脚本在「工具」子目录里
+TOP = "Sampan"                                     # 对方解压出来的文件夹名
 
 # 要带的：程序本身
-INCLUDE = ["main.py", "启动.bat", "requirements.txt", "README.md"]
+INCLUDE = ["main.py", "启动.bat", "requirements.txt", "README.md",
+           "README.en.md", "LICENSE"]
 INCLUDE_DIRS = ["translator", "工具"]
 
 # 绝对不能带的
@@ -83,13 +85,13 @@ def main():
     keep = "--带术语表" in sys.argv or "--with-glossary" in sys.argv
     files = collect()
     stamp = datetime.now().strftime("%Y%m%d")
-    out = ROOT / f"中泰翻译字幕_{stamp}.zip"
+    out = ROOT / f"{TOP}_{stamp}.zip"
 
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for src, arc in files:
-            z.write(src, f"zh-th-translator/{arc}")
-        z.writestr("zh-th-translator/config.json", clean_config(keep))
-        z.writestr("zh-th-translator/先读我.txt", READ_ME)
+            z.write(src, f"{TOP}/{arc}")
+        z.writestr(f"{TOP}/config.json", clean_config(keep))
+        z.writestr(f"{TOP}/先读我.txt", READ_ME)
 
     size = out.stat().st_size
     print(f"打好了：{out.name}　{size/1024:.0f} KB　{len(files)+2} 个文件\n")
@@ -121,7 +123,7 @@ def main():
             if re.search(r"\bAKID[A-Za-z0-9]{20,}", data):
                 bad.append(f"{n} 里有腾讯云形态的密钥")
 
-        cfg = json.loads(z.read("zh-th-translator/config.json"))
+        cfg = json.loads(z.read(f"{TOP}/config.json"))
         print(f"  {'✓' if not bad else '✗'} 没有密钥泄漏")
         for k in ("anthropic_api_key", "openai_api_key"):
             ok = cfg.get(k) == ""
@@ -154,7 +156,7 @@ def main():
     print("  然后照「先读我.txt」填自己的 Key。")
 
 
-READ_ME = """中泰实时翻译字幕 —— 拿到之后怎么开始
+READ_ME = """Sampan · 中泰实时翻译字幕 —— 拿到之后怎么开始
 
 1. 双击「启动.bat」
    第一次会自动建 Python 环境并安装依赖，大约 3~10 分钟。

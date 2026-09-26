@@ -1,0 +1,67 @@
+# 自动检查：每次推到 main、每个 PR 都会跑。结果在仓库的 Actions 页，
+# README 顶上的徽章也会跟着变色（绿 = 通过，红 = 有问题）。
+#
+# 注意：这是第二道防线。它只能在代码推上去之后才发现问题，
+# 而密钥一旦推到公开仓库就已经算泄露了。
+# 推之前在本机跑「工具/开源前检查.py」仍然是第一道。
+name: 自动检查
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  logic:
+    name: 开源前检查 + 逻辑自检
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/ci/requirements.txt
+
+      - name: 安装依赖
+        run: pip install -r .github/ci/requirements.txt
+
+      - name: 语法检查
+        run: python -m compileall -q main.py translator 工具
+
+      - name: 开源前检查（密钥 / 会议记录 / .gitignore）
+        run: python 工具/开源前检查.py
+
+      - name: 逻辑自检
+        env:
+          # 声卡库和本地 Whisper 用替身顶上，见 .github/ci/stubs/
+          PYTHONPATH: .github/ci/stubs
+        run: python 工具/自检.py
+
+  windows-install:
+    # 模拟别人第一次双击「启动.bat」：在一台全新的 Windows 上按 requirements.txt 装一遍。
+    # 哪天某个依赖出了新版本装不上，这里会先红，而不是等同事装的时候才报错。
+    name: Windows 全新安装
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: 按 requirements.txt 安装
+        run: pip install -r requirements.txt
+
+      - name: 依赖和主要模块都能导入
+        run: python -c "import pyaudiowpatch, faster_whisper, webrtcvad, soxr, opencc, anthropic, aiohttp, numpy; import translator.pipeline, translator.server, translator.minutes; print('OK')"
