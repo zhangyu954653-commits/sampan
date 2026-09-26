@@ -722,8 +722,58 @@ check("文件损坏时写回失败而不是覆盖",
 check("损坏的文件没被改动", _bad.read_bytes() == _before, True)
 check("没留下临时文件", list(_cdir.glob("*.tmp")), [])
 
+print("\n【配置写坏时不能把密钥冲掉】")
+# 这条是数据丢失级别的：用户手改 config.json 漏个逗号，
+# 以前 load_config() 会把整份默认配置原子替换写回去——
+# 三把 API 密钥和整张术语表当场消失，而且没有备份。
+_bdir = Path(tempfile.mkdtemp())
+_bp = _bdir / "config.json"
+_bp.write_text('''{
+  "anthropic_api_key": "sk-ant-KEEP-ME",
+  "openai_api_key": "sk-proj-KEEP-ME"
+  "asr": { "tencent_secret_key": "KEEP-ME-TOO" },
+  "glossary": { "验厂": "ตรวจโรงงาน" }
+}''', encoding="utf-8")          # ← 第 3 行末尾故意少个逗号
+_raw_before = _bp.read_text(encoding="utf-8")
+_C.CONFIG_PATH = _bp
+_cfg_broken = _C.load_config()
+_raw_after = _bp.read_text(encoding="utf-8")
+
+check("坏掉的 config.json 原文一字未动", _raw_after, _raw_before)
+check("密钥还在文件里", "sk-ant-KEEP-ME" in _raw_after, True)
+check("术语表还在文件里", "ตรวจโรงงาน" in _raw_after, True)
+check("留了一份备份",
+      bool(list(_bdir.glob("config.坏掉的备份_*.json"))), True)
+# 坏了也要能跑起来，只是这次用默认值
+check("仍然返回了一份可用配置", isinstance(_cfg_broken, dict), True)
+check("坏掉时不把环境变量密钥写进文件",
+      "sk-ant-" in _raw_after and _raw_after.count("sk-ant-") == 1, True)
+
 _C.CONFIG_PATH = _orig_cp
+shutil.rmtree(_bdir, ignore_errors=True)
 shutil.rmtree(_cdir, ignore_errors=True)
+
+print("\n【--test-translate 要跟着当前后端走】")
+# 用户切到 OpenAI 之后，这个命令还测 Anthropic 的话，
+# 测出来的结果代表不了真实会议路径，反而误导人
+import inspect as _insp
+
+import main as _main
+
+_src = _insp.getsource(_main.cmd_test_translate)
+check("按 translate_backend 选后端", "translate_backend" in _src, True)
+check("openai 时用 OpenAITranslator", "OpenAITranslator" in _src, True)
+check("anthropic 时用 Translator", "from translator.translate import" in _src, True)
+check("输出里不再写死 Claude", "Claude" not in _src, True)
+
+print("\n【依赖清单要覆盖默认配置真正需要的包】")
+_req = (_Path(__file__).resolve().parent.parent / "requirements.txt").read_text(
+    encoding="utf-8")
+# 默认 asr.backend 就是 tencent，少了 SDK 会静默退回本地模型（慢很多）
+check("含腾讯云 ASR SDK", "tencentcloud" in _req.lower(), True)
+# 纪要功能对外承诺「Markdown + Word」，少了它只有 Markdown
+check("含 python-docx", "python-docx" in _req.lower(), True)
+check("默认后端 anthropic 在清单里", "anthropic>=" in _req, True)
 
 print("\n【会议纪要】")
 from translator.minutes import _split, digest, meta_of

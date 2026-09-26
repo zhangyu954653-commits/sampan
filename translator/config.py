@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -46,6 +47,9 @@ DEFAULTS: dict = {
         # 没有能同时自动认中文和泰语的引擎）。
         "tencent_secret_id": "",
         "tencent_secret_key": "",
+        # AppID（账号里那串数字，和 SecretId 在同一个页面）。
+        # 一句话识别用不上，但「极速模式」的实时识别地址里必须带它。
+        "tencent_appid": "",
         "tencent_engines": {"zh": "16k_zh", "th": "16k_th"},
 
         "model_size": "auto",         # auto / tiny / base / small / medium / large-v3
@@ -353,11 +357,28 @@ def save_fields(updates: dict) -> bool:
 def load_config() -> dict:
     """读取 config.json；不存在就写一份默认的。"""
     user = {}
+    broken = False
     if CONFIG_PATH.exists():
         try:
             user = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         except Exception as e:  # 配置写坏了不要直接崩
-            print(f"[配置] config.json 解析失败，暂用默认配置：{e}")
+            # **文件坏了绝不能往回写。**
+            # 以前这里只是 user={} 就往下走，结果 _sync_file() 看到
+            # "所有默认字段都缺失"，把合并后的默认配置原子替换写回去——
+            # 用户手改配置漏个逗号，三把 API 密钥和整张术语表就没了，还没有备份。
+            broken = True
+            from datetime import datetime
+
+            bak = CONFIG_PATH.with_name(
+                f"config.坏掉的备份_{datetime.now():%Y%m%d_%H%M%S}.json")
+            try:
+                shutil.copy2(CONFIG_PATH, bak)
+                where = f"已备份成 {bak.name}"
+            except Exception:
+                where = "（备份也没成功，但原文件没动）"
+            print(f"[配置] config.json 格式有错，这次先用默认值跑：{e}")
+            print(f"       {where}　原文件保持不动，**不会被覆盖**")
+            print(f"       修好那个语法错误再重启，你的密钥和术语表都还在里面")
             user = {}
     else:
         # 第一次运行：优先照 config.example.json 生成，那份里有注释性的
@@ -381,7 +402,9 @@ def load_config() -> dict:
 
     # 补齐升级后新增的设置项。**必须在下面读环境变量之前做**，
     # 否则会把环境变量里的密钥写进文件。
-    if CONFIG_PATH.exists():
+    # 文件坏了的时候一定要跳过——那时候 user 是空的，
+    # 补齐逻辑会把整份默认配置盖上去，等于把用户的密钥删了。
+    if CONFIG_PATH.exists() and not broken:
         _sync_file(user, cfg)
 
     # 环境变量兜底

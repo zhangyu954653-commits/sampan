@@ -4,7 +4,7 @@
   "translate_backend": "anthropic",
   "openai_api_key": "",
   "openai_base_url": "",
-  "openai_translate_model": "gpt-5.6-luna",
+  "openai_translate_model": "gpt-4o-mini",
   "model": "claude-sonnet-5",
   "context_turns": 4,
   "disable_thinking": true,
@@ -14,6 +14,7 @@
     "backend": "tencent",
     "tencent_secret_id": "",
     "tencent_secret_key": "",
+    "tencent_appid": "",
     "tencent_engines": {
       "zh": "16k_zh",
       "th": "16k_th"
@@ -33,9 +34,8 @@
     "verify_logprob": -0.95,
     "verify_margin": 0.15,
     "openai_api_key": "",
-    "openai_model": "gpt-transcribe",
-    "openai_prompt": "",
-    "tencent_appid": ""
+    "openai_model": "gpt-4o-mini-transcribe",
+    "openai_prompt": ""
   },
   "language_bias": {
     "me": null,
@@ -59,7 +59,7 @@
     "end_frames": 38,
     "preroll_ms": 320,
     "max_seconds": 15.0,
-    "min_seconds": 0.4,
+    "min_seconds": 0.5,
     "rms_threshold": 0.012
   },
   "max_lag_sec": 6.0,

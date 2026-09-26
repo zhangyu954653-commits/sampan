@@ -344,18 +344,34 @@ def cmd_test_asr(cfg: dict):
 
 
 async def cmd_test_translate(cfg: dict):
-    """只测翻译：拿几句话真调一次 Claude，确认 Key 和网络都通。"""
-    from translator.translate import Translator
+    """只测翻译：拿几句话真调一次，确认 Key 和网络都通。
+
+    **必须跟着 translate_backend 走。** 以前这里写死了 Anthropic——
+    用户切到 OpenAI 之后，开会走的是 OpenAI，这个测试却还在测 Anthropic，
+    测出来的结果代表不了真实路径，反而误导人。
+    """
+    if str(cfg.get("translate_backend", "anthropic")).lower() == "openai":
+        from translator.translate_openai import OpenAITranslator as _T
+
+        who = "OpenAI"
+        model = cfg.get("openai_translate_model")
+        base = cfg.get("openai_base_url")
+    else:
+        from translator.translate import Translator as _T
+
+        who = "Anthropic"
+        model = cfg.get("model")
+        base = cfg.get("anthropic_base_url")
 
     try:
-        tr = Translator(cfg)
+        tr = _T(cfg)
     except Exception as e:
         print(f"\n✗ 翻译没法初始化：{e}\n")
         return
 
-    print(f"\n模型：{cfg.get('model')}")
-    if cfg.get("anthropic_base_url"):
-        print(f"中转地址：{cfg['anthropic_base_url']}")
+    print(f"\n后端：{who}　模型：{model}")
+    if base:
+        print(f"中转地址：{base}")
     if cfg.get("glossary"):
         print(f"术语表：{len(cfg['glossary'])} 条")
     print()
@@ -545,7 +561,7 @@ def main():
     ap.add_argument("--demo", action="store_true",
                     help="用假字幕演示界面效果（不需要 API Key）")
     ap.add_argument("--test-translate", action="store_true",
-                    help="只测翻译：真调一次 Claude，确认 API Key 可用")
+                    help="只测翻译：按当前后端真调一次，确认 API Key 可用")
     ap.add_argument("--test-asr", action="store_true",
                     help="对比本地模型和腾讯云的识别精度与耗时")
     ap.add_argument("--minutes", nargs="?", const="", metavar="记录文件",
