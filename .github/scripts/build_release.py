@@ -74,9 +74,14 @@ def scan(zip_path: Path) -> list[str]:
                     if any(x in m.group(0).lower() for x in PLACEHOLDERS):
                         continue
                     bad.append(f"{n} 里有 {label} 形态的字符串")
-        bat = z.read(f"{TOP}/启动.bat")
-        if b"\r\n" not in bat or bat.count(b"\n") != bat.count(b"\r\n"):
-            bad.append("启动.bat 不是 Windows 换行（CRLF），双击可能执行异常")
+        if f"{TOP}/启动.bat" not in names:
+            bad.append("缺少 启动.bat")
+        for n in names:
+            if not n.endswith(".bat"):
+                continue
+            bat = z.read(n)
+            if b"\r\n" not in bat or bat.count(b"\n") != bat.count(b"\r\n"):
+                bad.append(f"{n} 不是 Windows 换行（CRLF），双击可能执行异常")
         if f"{TOP}/先读我.txt" not in names:
             bad.append("缺少 先读我.txt")
     return bad
@@ -104,7 +109,7 @@ def main():
         for b in bad:
             print(f"   · {b}")
         sys.exit(1)
-    print("✓ 包内检查通过：无密钥、无配置和会议记录、启动.bat 是 CRLF")
+    print("✓ 包内检查通过：无密钥、无配置和会议记录、所有 .bat 都是 CRLF")
 
 
 if __name__ == "__main__":

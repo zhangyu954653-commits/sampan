@@ -28,7 +28,7 @@ TOP = "Sampan"                                     # 对方解压出来的文件
 # 要带的：程序本身
 INCLUDE = ["main.py", "启动.bat", "requirements.txt", "README.md",
            "README.en.md", "LICENSE"]
-INCLUDE_DIRS = ["translator", "工具"]
+INCLUDE_DIRS = ["translator", "工具", "assets"]
 
 # 绝对不能带的
 SKIP_DIRS = {"__pycache__", ".venv", ".browser-profile", ".git", "会议记录"}

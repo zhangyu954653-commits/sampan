@@ -40,6 +40,8 @@
 
 **已经装好的电脑**（Python + 全部依赖 + Whisper small 模型都在本地）：直接双击 `启动.bat` 即可。
 
+**桌面图标**：双击 `工具\创建桌面快捷方式.bat`，桌面上会出现带 Sampan 图标的快捷方式，以后双击它就行。项目文件夹挪了位置，再运行一次。
+
 ---
 
 ## 二、配置 API Key
@@ -669,6 +671,7 @@ config.json               ← 你的配置（首次运行自动生成）
 main.py                   ← 入口
 README.en.md              ← 英文简介
 assets/logo.svg           ← Logo
+assets/sampan.ico         ← 桌面图标（由 icon.svg / icon-small.svg 生成）
 .github/                  ← GitHub 自动检查 + 自动发布，平时不用管
 .githooks/pre-push        ← 推送前自动跑开源前检查（启用方法见 工具/说明.txt）
 CLAUDE.md                 ← 给 Claude 的项目规则，用 Claude 改代码时会自动遵守
@@ -689,7 +692,9 @@ translator/
   pipeline.py             主流程串联
   server.py               本地网页服务 + WebSocket 推送
   web/index.html          字幕界面
+  web/icon.svg            字幕窗口的图标
 工具/                      诊断和维护脚本，平时用不到（见 工具/说明.txt）
+  创建桌面快捷方式.bat       在桌面放一个带 Sampan 图标的快捷方式
   自检.py                  内部逻辑自测
   试试OpenAI.py            对比 OpenAI 和现在的模型
   实时识别测试.py           测极速模式能快多少
