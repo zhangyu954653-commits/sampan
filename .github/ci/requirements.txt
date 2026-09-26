@@ -1,0 +1,14 @@
+# GitHub 自动检查用的依赖（只在 GitHub 上装，和你本机无关）。
+#
+# 和根目录 requirements.txt 的区别：
+#   · 不装 PyAudioWPatch —— 只有 Windows 有，GitHub 的检查机是 Linux
+#   · 不装 faster-whisper —— 要下几百 MB 模型，纯逻辑测试用不上
+#   这两个由 .github/ci/stubs/ 里的替身顶上。
+#   · 多装 python-docx —— 让「Markdown → Word」那组测试也能跑
+numpy>=1.24
+soxr>=0.3.7
+webrtcvad-wheels>=2.0.14
+opencc-python-reimplemented>=0.1.7
+anthropic>=0.40.0
+aiohttp>=3.9
+python-docx

@@ -1,0 +1,29 @@
+#!/bin/sh
+# 推送前自动跑「开源前检查」：查出密钥、会议记录、config.json 就拦下这次推送。
+#
+# 启用（每台电脑只需一次，在项目文件夹里运行）：
+#     git config core.hooksPath .githooks
+# 确认没问题、需要临时跳过时：
+#     git push --no-verify
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+PY=""
+for c in .venv/Scripts/python.exe .venv/bin/python; do
+    if [ -f "$c" ]; then PY="$c"; break; fi
+done
+if [ -z "$PY" ]; then
+    for c in python python3 py; do
+        if command -v "$c" >/dev/null 2>&1; then PY="$c"; break; fi
+    done
+fi
+if [ -z "$PY" ]; then
+    echo "⚠ 没找到 Python，这次跳过开源前检查"
+    exit 0
+fi
+
+if ! "$PY" "工具/开源前检查.py"; then
+    echo
+    echo "✗ 开源前检查没通过，已拦下这次推送。按上面的提示处理后再推。"
+    exit 1
+fi
