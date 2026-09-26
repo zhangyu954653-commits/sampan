@@ -26,8 +26,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TOP = "Sampan"                                # 解压出来的文件夹名
 
 # 只给开发者看的，不进发布包
-SKIP_PREFIX = (".github/",)
-SKIP_FILES = {".gitignore", ".gitattributes"}
+SKIP_PREFIX = (".github/", ".githooks/")
+SKIP_FILES = {".gitignore", ".gitattributes", "CLAUDE.md"}
 
 # 和「工具/开源前检查.py」同一套密钥形态
 PATTERNS = [

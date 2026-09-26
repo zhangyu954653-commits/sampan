@@ -1,6 +1,8 @@
 <div align="center">
 
-# Sampan ⛵
+<img src="assets/logo.svg" width="112" alt="Sampan logo：一叶小船，两面对话气泡做帆">
+
+# Sampan
 
 **中文 ⇄ ไทย 视频会议实时翻译字幕**
 
@@ -666,7 +668,10 @@ Windows 缺泰语字体：设置 → 时间和语言 → 语言和区域 → 添
 config.json               ← 你的配置（首次运行自动生成）
 main.py                   ← 入口
 README.en.md              ← 英文简介
+assets/logo.svg           ← Logo
 .github/                  ← GitHub 自动检查 + 自动发布，平时不用管
+.githooks/pre-push        ← 推送前自动跑开源前检查（启用方法见 工具/说明.txt）
+CLAUDE.md                 ← 给 Claude 的项目规则，用 Claude 改代码时会自动遵守
 translator/
   config.py               配置读写
   audio_capture.py        双路音频采集（麦克风 + WASAPI 系统声音环回）

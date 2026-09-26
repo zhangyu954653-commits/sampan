@@ -1,6 +1,8 @@
 <div align="center">
 
-# Sampan ⛵
+<img src="assets/logo.svg" width="112" alt="Sampan logo: a small boat with two speech-bubble sails">
+
+# Sampan
 
 **Live Chinese ⇄ Thai subtitles for video meetings**
 
