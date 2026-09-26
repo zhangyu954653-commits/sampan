@@ -23,6 +23,9 @@
                    .venv\Scripts\python.exe 工具\开源前检查.py
                    ⚠ 每次推之前都跑一遍。.gitignore 只挡还没提交过的文件，
                      已经被跟踪的文件加进 .gitignore 也拦不住。
+                   想让它自动跑：在项目文件夹里运行一次
+                       git config core.hooksPath .githooks
+                   之后每次 git push 前都会先跑这个检查，没通过就拦下推送。
 
 
 运行方法
