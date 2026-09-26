@@ -1,4 +1,21 @@
-# 中文 ⇄ ไทย 视频会议实时翻译字幕
+<div align="center">
+
+# Sampan ⛵
+
+**中文 ⇄ ไทย 视频会议实时翻译字幕**
+
+[![自动检查](https://github.com/zhangyu954653-commits/sampan/actions/workflows/check.yml/badge.svg)](../../actions/workflows/check.yml)
+[![最新版本](https://img.shields.io/github/v/release/zhangyu954653-commits/sampan?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](../../releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+[⬇ 下载最新版](../../releases/latest)　·　[English](README.en.md)
+
+</div>
+
+> **Sampan** = 舢板 = เรือสำปั้น
+>
+> 英文、中文、泰语里都有的一个词——一个不用翻译的词。
+> 翻译（translate）的本义就是"渡过去"：一叶小船，把意思渡到对岸。
 
 在钉钉/腾讯会议/Zoom 开会时，自动把**你说的中文翻成泰语**、**对方说的泰语翻成中文**（对方说中文也会翻成泰语）。
 字幕显示在一个网页里，你把这个窗口共享出去，双方都能看到。
@@ -15,9 +32,11 @@
 
 ## 一、安装
 
-**这台电脑上已经装好了**（Python 3.11.9 + 全部依赖 + Whisper small 模型），直接双击 `启动.bat` 即可。
+**下载**：到 [Releases](../../releases/latest) 下载最新的 `Sampan-vX.Y.Z-Windows.zip`，解压到任意文件夹。
 
-换一台电脑时：先装 [Python 3.11](https://www.python.org/downloads/release/python-3119/)（**务必勾选 `Add python.exe to PATH`**），再双击 `启动.bat`，它会自动建环境装依赖，约 5~15 分钟。
+**第一次用**：先装 [Python 3.11](https://www.python.org/downloads/release/python-3119/)（**务必勾选 `Add python.exe to PATH`**），再双击 `启动.bat`，它会自动建环境装依赖，约 5~15 分钟。
+
+**已经装好的电脑**（Python + 全部依赖 + Whisper small 模型都在本地）：直接双击 `启动.bat` 即可。
 
 ---
 
@@ -209,6 +228,11 @@ https://brave-otter-plum.trycloudflare.com/?k=Xk7_mQ2p
 > 开完会记得关掉分享。
 
 ### 把软件发给别人用
+
+**最省事**：把 [Releases](../../releases/latest) 页的链接发给对方，让他自己下载最新版。
+发布包是 GitHub 自动打的，只有程序本身，没有任何密钥和会议记录（发新版本的方法见 `工具/说明.txt` 末尾）。
+
+**想把你调好的配置或术语表一起给对方**：用本机脚本打包——
 
 ```bash
 .venv\Scripts\python.exe 工具\打包分发.py
@@ -641,6 +665,8 @@ Windows 缺泰语字体：设置 → 时间和语言 → 语言和区域 → 添
 启动.bat                  ← 双击这个
 config.json               ← 你的配置（首次运行自动生成）
 main.py                   ← 入口
+README.en.md              ← 英文简介
+.github/                  ← GitHub 自动检查 + 自动发布，平时不用管
 translator/
   config.py               配置读写
   audio_capture.py        双路音频采集（麦克风 + WASAPI 系统声音环回）

@@ -1,0 +1,57 @@
+# 发新版本，两种方式任选：
+#   1. 网页上：仓库的 Actions 页 → 左边选「发布」→ Run workflow → 填版本号（如 v1.0.0）→ Run
+#   2. 命令行：git tag v1.0.0  然后  git push origin v1.0.0
+#
+# 会先把「自动检查」完整跑一遍，全部通过才打包 Sampan-<版本号>-Windows.zip，
+# 发布到仓库的 Releases 页。别人从那里下载，不用你再手动打包发文件。
+name: 发布
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号，例如 v1.0.0"
+        required: true
+  push:
+    tags: ["v*"]
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+    permissions:
+      contents: read
+
+  release:
+    name: 打包并发布
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version || github.ref_name }}
+    steps:
+      - name: 检查版本号格式
+        run: |
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "版本号要写成 v1.0.0 这种格式，现在填的是：$VERSION"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: 打发布包
+        run: python .github/scripts/build_release.py "$VERSION"
+
+      - name: 发布到 Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$VERSION" dist/*.zip \
+            --title "Sampan $VERSION" \
+            --target "$GITHUB_SHA" \
+            --generate-notes

@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "开源上传"
 
 # 该公开的
-FILES = ["main.py", "启动.bat", "requirements.txt", "README.md",
+FILES = ["main.py", "启动.bat", "requirements.txt", "README.md", "README.en.md",
          "LICENSE", ".gitignore", "config.example.json"]
 DIRS = ["translator", "工具"]
 
