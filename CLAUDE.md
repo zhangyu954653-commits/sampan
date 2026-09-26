@@ -22,6 +22,7 @@ Sampan 是一个 Windows 桌面程序：抓取麦克风和系统声音（WASAPI 
 - `translator/window.py` 的 `WINDOW_TITLE` 必须和 `translator/web/index.html` 的 `<title>` 一模一样：程序靠这个标题找到字幕窗口，并把它设为总在最前。改名要两处一起改。
 - `启动.bat` 必须是 CRLF 换行，其余文件用 LF。`.gitattributes` 已经管好了，不要去改。
 - `工具/自检.py` 只放纯逻辑测试：不联网，也不需要密钥。
+- 图标有两份源文件：`assets/icon.svg` 用于 48 像素及以上，也是字幕窗口的图标；`assets/icon-small.svg` 用于 16 到 32 像素。改完运行 `.github/scripts/make_icon.py`，重新生成 `assets/sampan.ico`。改了 `icon.svg` 以后，要同步拷一份到 `translator/web/icon.svg`。
 
 ## 协作方式
 

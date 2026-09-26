@@ -29,7 +29,7 @@ OUT = ROOT / "开源上传"
 # 该公开的
 FILES = ["main.py", "启动.bat", "requirements.txt", "README.md", "README.en.md",
          "LICENSE", ".gitignore", "config.example.json"]
-DIRS = ["translator", "工具"]
+DIRS = ["translator", "工具", "assets"]
 
 # 目录里也要排除的
 SKIP_DIRS = {"__pycache__", ".venv", ".browser-profile", ".git", "会议记录"}
